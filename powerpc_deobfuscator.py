@@ -79,11 +79,14 @@ def do_rlwinm(insn):
 
     out = '%s  <-  ' % ra
 
-    if n == 0: out += '%s' % rb
-    else: out += '(%s << %d)' % (rb, n)
+    if ((1<<n)-1) & mask:
+        if n == 0: out += '%s' % rb
+        else: out += '(%s << %d)' % (rb, n)
 
-    if mask != 0xffffffff:
-        out += ' & 0x%x' % mask
+        if mask != 0xffffffff:
+            out += ' & 0x%x' % mask
+    else:
+        out += '(%s & 0x%x) << %d' % (rb, mask>>n, n)
 
     print(out)
 
