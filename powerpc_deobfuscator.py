@@ -109,7 +109,7 @@ def do_clrrwi(insn):
 
 def do_clrlslwi(insn):
     operands = insn[len('clrlslwi '):].split(',')
-    (ra, rb, b,n) = get_operands(operands, 'ssi')
+    (ra, rb, b,n) = get_operands(operands, 'ssii')
     do_rlwinm('rlwinm %s,%s,%d,%d,%d' % (ra, rb, n, b-n, 31-n))
 
 
