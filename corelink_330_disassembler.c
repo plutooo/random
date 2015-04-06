@@ -32,7 +32,7 @@ void disasm(unsigned char* buf, long size) {
             if(left < 3) { printf("INVALID\n"); return; }
             
             p++;
-            printf("ADDH %s, 0x%04x      ; Add 16-bit immediate\n",
+            printf("ADDH %s, 0x%04x    ; Add 16-bit immediate\n",
                 (fb & 2) ? "DAR" : "SAR", buf[p++] | (buf[p++] << 8));
         }
         else if((fb & 0xFD) == 0x5C) {
@@ -159,33 +159,33 @@ void disasm(unsigned char* buf, long size) {
         else if((fb & 0xE8) == 0x28) {
             if(left < 2) { printf("INVALID\n"); return; }
 
+            if(fb & 2) suffix = "B";
+            else suffix = "S";
+
             if(fb & 4) {
                 if(fb & 0x10) { // TODO: DMALPEND S/B
                     p++;
                     sb = buf[p++];
-                    printf("LPENDFE 0x%02x "
-                        "; Loop-forever end (jump backwards)\n", sb);
+                    printf("LPEND.1%s 0x%02x       "
+                        "; Counter1-loop end (jump backwards)\n", suffix, sb);
                 }
                 else { // TODO: DMALPEND S/B
                     p++;
                     sb = buf[p++];
-                    printf("LPEND.0 0x%02x "
-                        "; Counter0-loop end (jump backwards)\n", sb);
+                    printf("LPENDFE%s 0x%02x       "
+                        "; Loop-forever end (jump backwards)\n", suffix, sb);
                 }
             }
             else {
                 if(fb & 0x10) { // TODO: DMALPEND S/B
                     p++;
                     sb = buf[p++];
-                    printf("LPEND.1 0x%02x "
-                        "; Counter1-loop end (jump backwards)\n", sb);
+                    printf("LPEND.0%s 0x%02x       "
+                        "; Counter0-loop end (jump backwards)\n", suffix, sb);
                 }
                 else {
                     p++;
                     sb = buf[p++];
-
-                    if(fb & 2) suffix = "B";
-                    else suffix = "S";
 
                     if((sb & 7) == 0) {
                         printf("STP%s 0x%02x           ; "
@@ -221,11 +221,10 @@ void disasm(unsigned char* buf, long size) {
 
             printf("WFE 0x%02x ; Wait for event\n", sb >> 3);
         }
-        // LP
         else if((fb & 0xFD) == 0x20) {
             p++;
             sb = buf[p++];
-            printf("LP 0x%02x             ; Loop\n", sb);
+            printf("LP.%d 0x%02x           ; Loop\n", (fb & 2) ? 1 : 0, sb);
         }
         else { printf("UNKNOWN: first byte = 0x%02x\n", fb); return; }
     }
