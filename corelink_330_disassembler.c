@@ -222,7 +222,12 @@ void disasm(unsigned char* buf, long size) {
             printf("WFE 0x%02x ; Wait for event\n", sb >> 3);
         }
         // LP
-        else { printf("INVALID_\n"); return; }
+        else if((fb & 0xFD) == 0x20) {
+            p++;
+            sb = buf[p++];
+            printf("LP 0x%02x             ; Loop\n", sb);
+        }
+        else { printf("UNKNOWN: first byte = 0x%02x\n", fb); return; }
     }
 }
 
