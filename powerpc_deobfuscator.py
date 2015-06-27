@@ -10,6 +10,8 @@
 import sys
 
 
+DEBUG=1
+
 def get_operands(operands, pattern):
     ret = []
     i = 0
@@ -21,7 +23,10 @@ def get_operands(operands, pattern):
     try:
         for p in pattern:
             if p == 'i':
-                ret.append(int(operands[i]))
+                if operands[i].startswith('0x'):
+                    ret.append(int(operands[i][2:], 16))
+                else:
+                    ret.append(int(operands[i]))
             elif p == 's':
                 ret.append(operands[i])
             i+=1
@@ -35,26 +40,7 @@ def get_operands(operands, pattern):
 # - rlwimi ---------------------------------------------------------------------
 
 def do_rlwimi(insn):
-    operands = insn[len('rlwimi '):].replace(' ', '').split(',')
-    (ra, rb, n, mb, me) = get_operands(operands, 'ssiii')
-
-    mask = 0
-    for i in range(mb, me+1):
-        mask = mask | (1 << (32-i-1))
-
-    out = '%s  <-  ' % ra
-
-    if mask^0xffffffff == 0: out += '%s | ' % ra
-    else: out += '(%s & ~0x%x) | ' % (ra, mask)
-
-    if mask == 0:
-        if n == 0: out += '%s' % rb
-        else: out += '(%s << %d)' % (rb, n)
-    else:
-        if n == 0: out += '(%s & 0x%x)' % (rb, mask)
-        else: out += '((%s << %d) & 0x%x)' % (rb, n, mask)
-
-    print(out)
+    raise Exception('Not implemented.')
 
 def do_inslwi(insn):
     operands = insn[len('inslwi '):].split(',')
@@ -69,26 +55,61 @@ def do_insrwi(insn):
 
 # - rlwinm ---------------------------------------------------------------------
 
+ONES = lambda n: (1<<n)-1
+ROL32 = lambda x, n: (x << n) | (x >> (32-n))
+ROR32 = lambda x, n: (x >> n) | (x << (32-n))
+
 def do_rlwinm(insn):
     operands = insn[len('rlwinm '):].replace(' ', '').split(',')
     (ra, rb, n, mb, me) = get_operands(operands, 'ssiii')
 
-    mask = 0
-    for i in range(mb, me+1):
-        mask = mask | (1 << (32-i-1))
+    rot = 31-me
+    if mb > me:
+        me += 32
 
-    out = '%s  <-  ' % ra
+    #if rot < 0:
+    #    mask = ROR32(ONES(me-mb+1), -rot)
+    #else:
+    mask = ROL32(ONES(me-mb+1), rot)
 
-    if ((1<<n)-1) & mask:
-        if n == 0: out += '%s' % rb
-        else: out += '(%s << %d)' % (rb, n)
+    left_shift_terms = []
+    all_ones = ONES(32-n) << n
+    if all_ones & mask:
+        if n == 0:
+            if mask & all_ones != all_ones:
+                left_shift_terms.append('%s & 0x%x' % (rb, mask & all_ones))
+            else:
+                left_shift_terms.append('%s' % rb)
+        else:
+            if mask & all_ones != all_ones:
+                left_shift_terms.append('(%s << %d) & 0x%x' %
+                    (rb, n, mask & all_ones))
+                left_shift_terms.append('(%s & 0x%x) << %d' %
+                    (rb, (mask & all_ones) >> n, n))
+            else:
+                left_shift_terms.append('%s << %d' % (rb, n))
 
-        if mask != 0xffffffff:
-            out += ' & 0x%x' % mask
-    else:
-        out += '(%s & 0x%x) << %d' % (rb, mask>>n, n)
+    right_shift_terms = []
+    all_ones = ONES(n)
+    if n != 0 and (all_ones & mask):
+        if mask & all_ones != all_ones:
+            right_shift_terms.append('(%s >> %d) & 0x%x' %
+                (rb, 32-n, mask & all_ones))
+            right_shift_terms.append('(%s & 0x%x) >> %d' %
+                (rb, (mask & all_ones) << (32-n), 32-n))
+        else:
+            right_shift_terms.append('%s >> %d' % (rb, 32-n))
 
-    print(out)
+    print 'Possible simplifications:'
+    for lt in left_shift_terms:
+        for rt in right_shift_terms:
+            print '%s  <-  %s | %s' % (ra, lt, rt)
+    if left_shift_terms == []:
+        for rt in right_shift_terms:
+            print '%s  <-  %s' % (ra, rt)
+    if right_shift_terms == []:
+        for lt in left_shift_terms:
+            print '%s  <-  %s' % (ra, lt)
 
 def do_extlwi(insn):
     operands = insn[len('extlwi '):].split(',')
