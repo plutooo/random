@@ -12,6 +12,10 @@ import sys
 
 DEBUG=1
 
+ONES = lambda n: (1<<n)-1
+ROL32 = lambda x, n: ((x << n) | (x >> (32-n))) & 0xffffffff
+ROR32 = lambda x, n: ((x >> n) | (x << (32-n))) & 0xffffffff
+
 def get_operands(operands, pattern):
     ret = []
     i = 0
@@ -29,7 +33,7 @@ def get_operands(operands, pattern):
                     ret.append(int(operands[i]))
             elif p == 's':
                 ret.append(operands[i])
-            i+=1
+            i += 1
     except:
         print('Expected integers as operand #%d.' % i)
         sys.exit(1)
@@ -40,7 +44,48 @@ def get_operands(operands, pattern):
 # - rlwimi ---------------------------------------------------------------------
 
 def do_rlwimi(insn):
-    raise Exception('Not implemented.')
+    operands = insn[len('rlwimi '):].replace(' ', '').split(',')
+    (ra, rb, n, mb, me) = get_operands(operands, 'ssiii')
+
+    rot = 31-me
+    if mb > me:
+        me += 32
+    mask = ROL32(ONES(me-mb+1), rot)
+
+    all_ones = ONES(32)
+
+    terms = []
+    left_shift_term_mask = (ONES(32) << n) & mask
+    if left_shift_term_mask != 0:
+        if n == 0:
+            if left_shift_term_mask == all_ones:
+                terms.append('%s' % rb)
+            else:
+                terms.append('(%s & 0x%x)' % (rb, left_shift_term_mask))
+        else:
+            if left_shift_term_mask == all_ones:
+                terms.append('(%s << %d)' % (rb, n))
+            else:
+                terms.append('((%s << %d) & 0x%x)' % (rb, n,
+                    left_shift_term_mask))
+
+    right_shift_term_mask = (ONES(32) >> (32-n)) & mask
+    if right_shift_term_mask != 0:
+        if 32-n == 0:
+            if right_shift_term_mask == all_ones:
+                terms.append('%s' % rb)
+            else:
+                terms.append('(%s & 0x%x)' % (rb, right_shift_term_mask))
+        else:
+            if right_shift_term_mask == all_ones:
+                terms.append('(%s >> %d)' % (rb, 32-n))
+            else:
+                terms.append('((%s >> %d) & 0x%x)' % (rb, 32-n,
+                    right_shift_term_mask))
+
+    print 'Possible simplifications:'
+    print '%s  <-  (%s & 0x%08x) | %s' % (ra, ra, mask^0xffffffff,
+        ' | '.join(terms))
 
 def do_inslwi(insn):
     operands = insn[len('inslwi '):].split(',')
@@ -55,10 +100,6 @@ def do_insrwi(insn):
 
 # - rlwinm ---------------------------------------------------------------------
 
-ONES = lambda n: (1<<n)-1
-ROL32 = lambda x, n: (x << n) | (x >> (32-n))
-ROR32 = lambda x, n: (x >> n) | (x << (32-n))
-
 def do_rlwinm(insn):
     operands = insn[len('rlwinm '):].replace(' ', '').split(',')
     (ra, rb, n, mb, me) = get_operands(operands, 'ssiii')
@@ -66,10 +107,6 @@ def do_rlwinm(insn):
     rot = 31-me
     if mb > me:
         me += 32
-
-    #if rot < 0:
-    #    mask = ROR32(ONES(me-mb+1), -rot)
-    #else:
     mask = ROL32(ONES(me-mb+1), rot)
 
     left_shift_terms = []
@@ -143,6 +180,10 @@ def do_clrlslwi(insn):
 def deobfuscate():
     insn = ' '.join(sys.argv[1:]).replace('  ', ' ').strip()
     mnemonic = insn.split(' ')[0]
+
+    # Remove dot at end of mnemonic if exists.
+    if mnemonic[-1] == '.':
+        mnemonic = mnemonic[:-1]
 
     # rlwimi-based
     if mnemonic == 'inslwi':
