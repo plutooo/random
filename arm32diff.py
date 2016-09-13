@@ -43,7 +43,7 @@ def get_subs(file_name):
             if offset & (1 << 23):
                 offset = offset - (1 << 24)
             sub = pos + (offset << 2) + 8
-            if sub > 0:
+            if sub > 0 and sub < len(buf):
                 subs.add(sub)
         pos += 4
 
